@@ -172,6 +172,8 @@ const FDPSettings = (() => {
                         <input type="file" id="importJsonInput" accept="application/json" style="display:none;">
                     </label>
                     <button class="btn btn-secondary" id="exportCsvBtn">Mitarbeiterliste als CSV (Excel)</button>
+                    <button class="btn btn-secondary" id="exportEmployeesXlsxBtn">Mitarbeiterliste als Excel (.xlsx)</button>
+                    <button class="btn btn-secondary" id="exportAbsencesXlsxBtn">Abwesenheiten als Excel (.xlsx)</button>
                     <button class="btn btn-secondary" id="exportStatsCsvBtn">Statistik als CSV (Excel)</button>
                     <button class="btn btn-secondary" id="printBtn">Kalender drucken / als PDF speichern</button>
                 </div>
@@ -235,6 +237,8 @@ const FDPSettings = (() => {
         container.querySelector('#exportJsonBtn').addEventListener('click', exportJson);
         container.querySelector('#importJsonInput').addEventListener('change', importJson);
         container.querySelector('#exportCsvBtn').addEventListener('click', exportEmployeesCsv);
+        container.querySelector('#exportEmployeesXlsxBtn').addEventListener('click', exportEmployeesXlsx);
+        container.querySelector('#exportAbsencesXlsxBtn').addEventListener('click', exportAbsencesXlsx);
         container.querySelector('#exportStatsCsvBtn').addEventListener('click', exportStatsCsv);
         container.querySelector('#printBtn').addEventListener('click', async () => {
             await FDPUI.navigateTo('calendar');

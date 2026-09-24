@@ -1,8 +1,8 @@
 /**
  * Projekt:    Feuerwehr Dienstplanungssoftware (FDP)
  * Datei:      js/app.js
- * Version:    1.16.0
- * Build:      20
+ * Version:    1.19.0
+ * Build:      23
  * Datum:      2026-07-11
  *
  * Beschreibung:
@@ -16,8 +16,8 @@
 
 const FDPApp = (() => {
 
-    const VERSION = '1.16.0';
-    const BUILD = '20';
+    const VERSION = '1.19.0';
+    const BUILD = '23';
 
     async function init() {
         await FDP.db.open();
@@ -284,6 +284,10 @@ const FDPApp = (() => {
         document.getElementById('appVersion').textContent = `Version ${VERSION} · Build ${BUILD}`;
     }
 
+    // Ausgewähltes Datum für die Abteilungs-Anwesenheit-Detailansicht im
+    // Dashboard (bleibt für die Dauer der Sitzung erhalten, Standard: heute)
+    let deptDetailDate = null;
+
     async function renderDashboard(container) {
         const year = Number(await FDP.db.getSetting('year', new Date().getFullYear()));
         const bundesland = await FDP.db.getSetting('bundesland', 'NW');
@@ -372,6 +376,17 @@ const FDPApp = (() => {
                         </ul>`}
                 </div>
 
+                <div class="card card-wide">
+                    <h2>Abteilungs-Anwesenheit im Detail</h2>
+                    <div class="dept-detail-nav">
+                        <button class="icon-btn" id="deptDetailPrevBtn" title="Vorheriger Tag">${FDPUI.icon('chevronLeft')}</button>
+                        <input type="date" id="deptDetailDateInput" value="${deptDetailDate || todayStr}">
+                        <button class="icon-btn" id="deptDetailNextBtn" title="Nächster Tag">${FDPUI.icon('chevronRight')}</button>
+                        <button class="btn btn-secondary btn-sm" id="deptDetailTodayBtn">Heute</button>
+                    </div>
+                    <div id="deptDetailBody"></div>
+                </div>
+
                 <div class="card">
                     <h2>Heutige Diensteinteilung</h2>
                     ${activeServiceTypes.length === 0 ? '<div class="empty-state-inline">Keine Dienstarten konfiguriert.</div>' : `
@@ -416,6 +431,93 @@ const FDPApp = (() => {
         `;
 
         container.querySelector('#dashGotoCalendar').addEventListener('click', () => FDPUI.navigateTo('calendar'));
+
+        // Abteilungs-Anwesenheit im Detail: Navigation + initiales Rendern
+        if (!deptDetailDate) deptDetailDate = todayStr;
+        const deptDetailBody = container.querySelector('#deptDetailBody');
+        const deptDetailDateInput = container.querySelector('#deptDetailDateInput');
+
+        function shiftDate(dateStr, deltaDays) {
+            const d = FDPUI.parseISO(dateStr);
+            const shifted = new Date(d.getFullYear(), d.getMonth(), d.getDate() + deltaDays);
+            return FDPUI.formatDateISO(shifted);
+        }
+        function refreshDeptDetail() {
+            deptDetailDateInput.value = deptDetailDate;
+            renderDeptDetailBody(deptDetailBody, deptDetailDate, employees, departments, assignments, absences, holidays);
+        }
+        container.querySelector('#deptDetailPrevBtn').addEventListener('click', () => {
+            deptDetailDate = shiftDate(deptDetailDate, -1);
+            refreshDeptDetail();
+        });
+        container.querySelector('#deptDetailNextBtn').addEventListener('click', () => {
+            deptDetailDate = shiftDate(deptDetailDate, 1);
+            refreshDeptDetail();
+        });
+        container.querySelector('#deptDetailTodayBtn').addEventListener('click', () => {
+            deptDetailDate = todayStr;
+            refreshDeptDetail();
+        });
+        deptDetailDateInput.addEventListener('change', () => {
+            if (deptDetailDateInput.value) {
+                deptDetailDate = deptDetailDateInput.value;
+                refreshDeptDetail();
+            }
+        });
+        refreshDeptDetail();
+    }
+
+    /**
+     * Rendert für ein bestimmtes Datum, welche Mitarbeiter in welcher
+     * Abteilung anwesend (bzw. abwesend) sind - beschränkt auf Abteilungen,
+     * für die eine Mindestbesetzung hinterlegt ist (dieselben, die auch die
+     * Warnkarte darüber auswertet), damit die Ansicht übersichtlich bleibt.
+     */
+    function renderDeptDetailBody(bodyEl, dateStr, employees, departments, assignments, absences, holidays) {
+        const date = FDPUI.parseISO(dateStr);
+        const relevantDepartments = departments.filter(d => (d.minPresence || 0) > 0);
+        const absenceIndex = FDPPresence.buildAbsenceIndex(absences);
+        const violations = FDPPresence.computeViolationsForDate(dateStr, employees, departments, assignments, absences, holidays);
+        const violatedCodes = new Set(violations.map(v => v.departmentCode));
+
+        const employeesByDept = new Map();
+        employees.filter(e => e.active && e.departmentCode).forEach((e) => {
+            if (!employeesByDept.has(e.departmentCode)) employeesByDept.set(e.departmentCode, []);
+            employeesByDept.get(e.departmentCode).push(e);
+        });
+
+        const rows = relevantDepartments.map((dept) => {
+            const codes = FDPPresence.subtreeCodes(dept.code, departments);
+            const present = [];
+            const absent = [];
+            codes.forEach((code) => {
+                (employeesByDept.get(code) || []).forEach((e) => {
+                    if (FDPPresence.isPresent(e, dateStr, absenceIndex)) present.push(e);
+                    else absent.push(e);
+                });
+            });
+            return { dept, present, absent };
+        });
+
+        bodyEl.innerHTML = `
+            <p class="text-muted" style="margin-top:2px;">${FDPUI.weekdayLong(date)}, ${FDPUI.formatDateDisplay(dateStr)}${holidays[dateStr] ? ` – ${FDPUI.escapeHtml(holidays[dateStr])}` : ''}</p>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>Abteilung</th><th>Anwesend</th><th>Abwesend</th></tr></thead>
+                    <tbody>
+                        ${rows.map(({ dept, present, absent }) => `
+                            <tr>
+                                <td class="cell-strong">
+                                    ${violatedCodes.has(dept.code) ? `${FDPUI.icon('warning')} ` : ''}${FDPUI.escapeHtml(dept.code)} – ${FDPUI.escapeHtml(dept.name)}
+                                </td>
+                                <td>${present.length > 0 ? present.map(e => FDPUI.escapeHtml(e.shortCode || e.name)).join(', ') : '<span class="text-muted">niemand</span>'}</td>
+                                <td>${absent.length > 0 ? `<span class="text-muted">${absent.map(e => FDPUI.escapeHtml(e.shortCode || e.name)).join(', ')}</span>` : '–'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
     }
 
     return { init, applyColorTheme, refreshHeaderInfo, VERSION, BUILD };

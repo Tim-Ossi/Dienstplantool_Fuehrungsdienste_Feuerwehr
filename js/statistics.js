@@ -1,8 +1,8 @@
 /**
  * Projekt:    Feuerwehr Dienstplanungssoftware (FDP)
  * Datei:      js/statistics.js
- * Version:    1.3.0
- * Build:      9
+ * Version:    1.4.0
+ * Build:      22
  * Datum:      2026-07-11
  *
  * Beschreibung:
@@ -41,12 +41,16 @@ const FDPStatistics = (() => {
 
         const totalServices = stats.reduce((s, x) => s + x.totalServices, 0);
 
-        // Für den Soll/Ist-Vergleich werden als "Leiter der Feuerwehr / bevorzugte
-        // Führungsfunktion" markierte Mitarbeiter ausgenommen: Sie sind bewusst
-        // hauptsächlich für LdF/FBL vorgesehen, ein geringer Einsatzdienstanteil ist
-        // bei ihnen gewollt und soll weder als Abweichung markiert noch den
-        // Vergleichswert für die übrigen Mitarbeiter verfälschen.
-        const regularStats = stats.filter(s => !s.employee.preferredLeadership);
+        // Für den Soll/Ist-Vergleich werden ausgenommen:
+        //  - als "Leiter der Feuerwehr / bevorzugte Führungsfunktion" markierte
+        //    Mitarbeiter (bewusst hauptsächlich für LdF/FBL vorgesehen)
+        //  - Sachbearbeiter ohne Führungsdienstler-Häkchen (dutyRosterEligible
+        //    === false) sowie inaktive Mitarbeiter: Diese werden von der
+        //    automatischen Planung grundsätzlich nie berücksichtigt und haben
+        //    daher immer 0 Dienste - würden sie mitgezählt, würde das den
+        //    Vergleichswert für die tatsächlich diensteinteilbaren Mitarbeiter
+        //    künstlich nach unten verfälschen.
+        const regularStats = stats.filter(s => !s.employee.preferredLeadership && s.employee.active && s.employee.dutyRosterEligible !== false);
         const regularTotal = regularStats.reduce((s, x) => s + x.totalServices, 0);
         const regularAvg = regularStats.length ? (regularTotal / regularStats.length).toFixed(1) : '0';
 
@@ -87,7 +91,7 @@ const FDPStatistics = (() => {
                 <h2>Belastungsübersicht</h2>
                 <p class="text-muted">Spaltenüberschrift anklicken, um zu sortieren.</p>
                 <div id="belastungTableWrap"></div>
-                ${leadershipServiceTypes.length > 0 ? `<p class="text-muted" style="margin-top:10px;">* ${leadershipServiceTypes.map(s => s.name).join(' / ')} fließen nicht in die Einsatzdienst-Statistik (Gesamt, Soll/Ist, Wochenenden/Feiertage, Diagramm) ein. Als „Leitung" markierte Mitarbeiter sind bewusst hauptsächlich für Führungsfunktionen vorgesehen und werden beim Soll/Ist-Vergleich der übrigen Mitarbeiter (Ø ${regularAvg}) nicht mitgerechnet.</p>` : ''}
+                ${leadershipServiceTypes.length > 0 ? `<p class="text-muted" style="margin-top:10px;">* ${leadershipServiceTypes.map(s => s.name).join(' / ')} fließen nicht in die Einsatzdienst-Statistik (Gesamt, Soll/Ist, Wochenenden/Feiertage, Diagramm) ein. Als „Leitung" markierte, als „Sachbearbeitung" (nicht führungsdienstplanbar) gekennzeichnete sowie inaktive Mitarbeiter werden beim Soll/Ist-Vergleich der übrigen, tatsächlich diensteinteilbaren Mitarbeiter (Ø ${regularAvg}) nicht mitgerechnet, da sie planerisch nie Dienste erhalten.</p>` : ''}
             </div>
         `;
 
@@ -115,7 +119,7 @@ const FDPStatistics = (() => {
             { key: 'trainingDays', label: 'Fortbildung', numeric: true, get: (s) => s.trainingDays },
             { key: 'sickDays', label: 'Krankheit', numeric: true, get: (s) => s.sickDays },
             { key: 'totalServices', label: 'Gesamt Einsatzdienste', numeric: true, get: (s) => s.totalServices },
-            { key: 'sollist', label: 'Soll/Ist', numeric: true, get: (s) => s.employee.preferredLeadership ? -9999 : (s.totalServices - Number(regularAvg)) },
+            { key: 'sollist', label: 'Soll/Ist', numeric: true, get: (s) => (s.employee.preferredLeadership || !s.employee.active || s.employee.dutyRosterEligible === false) ? -9999 : (s.totalServices - Number(regularAvg)) },
             { key: 'totalAll', label: 'Gesamt (inkl. Führung)', numeric: true, get: (s) => s.totalServices + leadershipServiceTypes.reduce((sum, st) => sum + (s.byServiceType[st.id] || 0), 0) }
         );
         return columns;
@@ -149,7 +153,7 @@ const FDPStatistics = (() => {
                     <tbody>
                         ${sorted.map((s) => `
                             <tr>
-                                <td class="cell-strong">${FDPUI.escapeHtml(s.employee.name)}${s.employee.preferredLeadership ? ' <span class="badge badge-warning" title="Leiter der Feuerwehr / bevorzugt Führungsfunktion">Leitung</span>' : ''}</td>
+                                <td class="cell-strong">${FDPUI.escapeHtml(s.employee.name)}${s.employee.preferredLeadership ? ' <span class="badge badge-warning" title="Leiter der Feuerwehr / bevorzugt Führungsfunktion">Leitung</span>' : ''}${(!s.employee.preferredLeadership && s.employee.dutyRosterEligible === false) ? ' <span class="badge badge-neutral" title="Nimmt nicht an der Führungsdienstplanung teil">Sachbearbeitung</span>' : ''}${!s.employee.active ? ' <span class="badge badge-neutral">Inaktiv</span>' : ''}</td>
                                 ${operationalServiceTypes.map(st => `<td>${s.byServiceType[st.id] || 0}</td>`).join('')}
                                 ${leadershipServiceTypes.map(st => `<td>${s.byServiceType[st.id] || 0}</td>`).join('')}
                                 <td>${s.weekends}</td>
@@ -158,7 +162,7 @@ const FDPStatistics = (() => {
                                 <td>${s.trainingDays}</td>
                                 <td>${s.sickDays}</td>
                                 <td class="cell-strong">${s.totalServices}</td>
-                                <td>${s.employee.preferredLeadership ? '<span class="badge badge-neutral">Führungsfunktion</span>' : renderSollIst(s.totalServices, regularAvg)}</td>
+                                <td>${(s.employee.preferredLeadership || !s.employee.active || s.employee.dutyRosterEligible === false) ? `<span class="badge badge-neutral">${s.employee.preferredLeadership ? 'Führungsfunktion' : (!s.employee.active ? 'nicht aktiv' : 'nicht diensteinteilbar')}</span>` : renderSollIst(s.totalServices, regularAvg)}</td>
                                 <td class="cell-strong">${s.totalServices + leadershipServiceTypes.reduce((sum, st) => sum + (s.byServiceType[st.id] || 0), 0)}</td>
                             </tr>
                         `).join('')}

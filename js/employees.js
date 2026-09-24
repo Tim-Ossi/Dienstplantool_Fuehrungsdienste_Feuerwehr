@@ -47,6 +47,7 @@ const FDPEmployees = (() => {
                     <p class="view-subtitle">${employees.length} Mitarbeiter erfasst · ${employees.filter(e => e.active).length} aktiv · ${rosterCount} führungsdienstplanbar</p>
                 </div>
                 <div class="header-actions">
+                    <button class="btn btn-secondary" id="exportEmployeesXlsxBtn">Als Excel (.xlsx) exportieren</button>
                     <button class="btn btn-secondary" id="importEmployeesBtn">${FDPUI.icon('plus')} Aus Excel/CSV importieren</button>
                     <button class="btn btn-primary" id="addEmployeeBtn">${FDPUI.icon('plus')} Mitarbeiter anlegen</button>
                 </div>
@@ -68,6 +69,7 @@ const FDPEmployees = (() => {
         container.querySelector('#addEmployeeBtn')?.addEventListener('click', openAdd);
         container.querySelector('#addEmployeeBtnEmpty')?.addEventListener('click', openAdd);
         container.querySelector('#importEmployeesBtn')?.addEventListener('click', () => FDPImport.openImportDialog());
+        container.querySelector('#exportEmployeesXlsxBtn')?.addEventListener('click', exportEmployeesXlsx);
 
         if (employees.length > 0) {
             renderEmployeeTable(container.querySelector('#employeeTableWrap'), employees, departmentByCode);
@@ -395,6 +397,39 @@ const FDPEmployees = (() => {
             FDPUI.closeModal();
             FDPUI.refreshCurrentView();
         });
+    }
+
+    /**
+     * Exportiert alle Mitarbeiter als echte .xlsx-Datei - mit denselben
+     * Spaltenüberschriften, die auch der Mitarbeiter-Import erkennt (siehe
+     * import.js), damit sich die Datei nach Bearbeitung direkt wieder
+     * importieren lässt. Im Unterschied zum CSV-Export in den Einstellungen
+     * wird die Abteilung hier korrekt über den zugeordneten Abteilungscode
+     * aufgelöst (nicht das veraltete Freitextfeld).
+     */
+    async function exportEmployeesXlsx() {
+        const [employees, departments] = await Promise.all([
+            FDP.db.getAll('employees'),
+            FDP.db.getAll('departments')
+        ]);
+        const departmentByCode = new Map(departments.map(d => [d.code, d]));
+
+        const header = ['Name', 'Kürzel', 'Abteilung', 'Qualifikationen', 'Aktiv', 'Urlaubsanspruch', 'Resturlaub', 'Beschäftigungsumfang %', 'Bemerkungen'];
+        const rows = employees.map((e) => {
+            const dept = e.departmentCode ? departmentByCode.get(e.departmentCode) : null;
+            const deptLabel = dept ? `${dept.code} ${dept.name}` : (e.department || '');
+            return [
+                e.name || '', e.shortCode || '', deptLabel, (e.qualifications || []).join(', '),
+                e.active ? 'Ja' : 'Nein', e.vacationEntitlement ?? '', e.vacationRemaining ?? '',
+                e.partTimePercent ?? '', e.notes || ''
+            ];
+        });
+
+        const bytes = FDPImport.buildMinimalXlsx('Mitarbeiter', [header, ...rows]);
+        const d = new Date();
+        const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+        FDPImport.downloadBytes(`FDP-Mitarbeiter-${stamp}.xlsx`, bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        FDPUI.showToast(`${employees.length} Mitarbeiter als Excel-Datei exportiert`, 'success');
     }
 
     return { render, openEmployeeDialog, compareDepartmentCodes, flattenDepartmentTree };

@@ -55,6 +55,7 @@ const FDPVacation = (() => {
                     <p class="view-subtitle">${absences.length} Einträge erfasst</p>
                 </div>
                 <div class="header-actions">
+                    <button class="btn btn-secondary" id="exportAbsencesXlsxBtn">Als Excel (.xlsx) exportieren</button>
                     <button class="btn btn-secondary" id="importAbsenceBtn">${FDPUI.icon('plus')} Aus Excel/CSV importieren</button>
                     <button class="btn btn-primary" id="addAbsenceBtn">${FDPUI.icon('plus')} Abwesenheit eintragen</button>
                 </div>
@@ -85,6 +86,7 @@ const FDPVacation = (() => {
 
         container.querySelector('#addAbsenceBtn').addEventListener('click', () => openAbsenceDialog(employees));
         container.querySelector('#importAbsenceBtn').addEventListener('click', () => FDPImport.openAbsenceImportDialog());
+        container.querySelector('#exportAbsencesXlsxBtn').addEventListener('click', () => exportAbsencesXlsx(absences, employeeMap));
 
         if (absences.length > 0) {
             renderAbsenceTable(container.querySelector('#absenceTableWrap'), absences, employees, employeeMap);
@@ -344,6 +346,33 @@ const FDPVacation = (() => {
     async function getAbsencesForDate(dateStr) {
         const absences = await FDP.db.getAll('absences');
         return absences.filter(a => a.dateFrom <= dateStr && dateStr <= a.dateTo);
+    }
+
+    /**
+     * Exportiert alle erfassten Abwesenheiten als echte .xlsx-Datei - mit
+     * denselben Spaltenüberschriften (Mitarbeiter, Art, Von, Bis, Bemerkung),
+     * die auch die Import-Vorlage und der Abwesenheiten-Import in import.js
+     * erwarten, damit sich die Datei nach Bearbeitung direkt wieder
+     * importieren lässt.
+     */
+    function exportAbsencesXlsx(absences, employeeMap) {
+        if (absences.length === 0) {
+            FDPUI.showToast('Es sind keine Abwesenheiten vorhanden.', 'info');
+            return;
+        }
+        const header = ['Mitarbeiter', 'Art', 'Von', 'Bis', 'Bemerkung'];
+        const rows = [...absences]
+            .sort((a, b) => a.dateFrom.localeCompare(b.dateFrom))
+            .map((a) => {
+                const emp = employeeMap.get(a.employeeId);
+                return [emp ? emp.name : 'Unbekannt', TYPE_LABELS[a.type] || a.type, a.dateFrom, a.dateTo, a.note || ''];
+            });
+
+        const bytes = FDPImport.buildMinimalXlsx('Abwesenheiten', [header, ...rows]);
+        const d = new Date();
+        const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+        FDPImport.downloadBytes(`FDP-Abwesenheiten-${stamp}.xlsx`, bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        FDPUI.showToast(`${absences.length} Abwesenheiten als Excel-Datei exportiert`, 'success');
     }
 
     return { render, openAbsenceDialog, getAbsencesForDate, TYPE_LABELS, countDays };
