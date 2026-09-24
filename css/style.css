@@ -1,8 +1,8 @@
 /**
  * Projekt:    Feuerwehr Dienstplanungssoftware (FDP)
  * Datei:      css/style.css
- * Version:    1.19.0
- * Build:      23
+ * Version:    1.20.0
+ * Build:      24
  * Datum:      2026-07-11
  *
  * Beschreibung:
@@ -366,17 +366,20 @@ textarea:focus-visible,
 
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 1.3fr 1fr 1fr 0.9fr;
+    grid-template-columns: 1.3fr 1fr 1fr;
     gap: 16px;
     align-items: start;
 }
 
 .card-wide { grid-column: 1 / -1; }
 
-.dept-detail-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.card-header-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.card-header-row h2 { margin-bottom: 0; }
+
+.dept-detail-nav { display: flex; align-items: center; gap: 6px; flex: none; }
 .dept-detail-nav input[type="date"] {
-    padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 6px;
-    font-size: 13px; font-family: inherit; color: var(--color-text);
+    width: 140px; padding: 5px 6px; border: 1px solid var(--color-border); border-radius: 6px;
+    font-size: 12.5px; font-family: inherit; color: var(--color-text);
 }
 
 .warning-inline-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }

@@ -1,8 +1,8 @@
 /**
  * Projekt:    Feuerwehr Dienstplanungssoftware (FDP)
  * Datei:      js/app.js
- * Version:    1.19.0
- * Build:      23
+ * Version:    1.20.0
+ * Build:      24
  * Datum:      2026-07-11
  *
  * Beschreibung:
@@ -16,8 +16,8 @@
 
 const FDPApp = (() => {
 
-    const VERSION = '1.19.0';
-    const BUILD = '23';
+    const VERSION = '1.20.0';
+    const BUILD = '24';
 
     async function init() {
         await FDP.db.open();
@@ -376,17 +376,6 @@ const FDPApp = (() => {
                         </ul>`}
                 </div>
 
-                <div class="card card-wide">
-                    <h2>Abteilungs-Anwesenheit im Detail</h2>
-                    <div class="dept-detail-nav">
-                        <button class="icon-btn" id="deptDetailPrevBtn" title="Vorheriger Tag">${FDPUI.icon('chevronLeft')}</button>
-                        <input type="date" id="deptDetailDateInput" value="${deptDetailDate || todayStr}">
-                        <button class="icon-btn" id="deptDetailNextBtn" title="Nächster Tag">${FDPUI.icon('chevronRight')}</button>
-                        <button class="btn btn-secondary btn-sm" id="deptDetailTodayBtn">Heute</button>
-                    </div>
-                    <div id="deptDetailBody"></div>
-                </div>
-
                 <div class="card">
                     <h2>Heutige Diensteinteilung</h2>
                     ${activeServiceTypes.length === 0 ? '<div class="empty-state-inline">Keine Dienstarten konfiguriert.</div>' : `
@@ -403,18 +392,17 @@ const FDPApp = (() => {
                     </ul>`}
                 </div>
 
-                <div class="card">
-                    <h2>Abwesenheiten heute</h2>
-                    ${todayAbsences.length === 0 ? '<div class="empty-state-inline">Niemand ist heute abwesend.</div>' : `
-                    <ul class="today-service-list">
-                        ${todayAbsences.map((a) => {
-                            const emp = employees.find(e => e.id === a.employeeId);
-                            return `<li>
-                                <span class="badge badge-info">${FDPVacation.TYPE_LABELS[a.type]}</span>
-                                <span class="today-service-name">${FDPUI.escapeHtml(emp ? emp.name : 'Unbekannt')}</span>
-                            </li>`;
-                        }).join('')}
-                    </ul>`}
+                <div class="card card-wide">
+                    <div class="card-header-row">
+                        <h2>Abteilungs-Anwesenheit im Detail</h2>
+                        <div class="dept-detail-nav">
+                            <button class="icon-btn" id="deptDetailPrevBtn" title="Vorheriger Tag">${FDPUI.icon('chevronLeft')}</button>
+                            <input type="date" id="deptDetailDateInput" value="${deptDetailDate || todayStr}">
+                            <button class="icon-btn" id="deptDetailNextBtn" title="Nächster Tag">${FDPUI.icon('chevronRight')}</button>
+                            <button class="btn btn-secondary btn-sm" id="deptDetailTodayBtn">Heute</button>
+                        </div>
+                    </div>
+                    <div id="deptDetailBody"></div>
                 </div>
 
                 <div class="card">
@@ -499,6 +487,11 @@ const FDPApp = (() => {
             return { dept, present, absent };
         });
 
+        function findAbsenceType(employeeId) {
+            const a = absences.find(x => x.employeeId === employeeId && x.dateFrom <= dateStr && dateStr <= x.dateTo);
+            return a ? (FDPVacation.TYPE_LABELS[a.type] || a.type) : null;
+        }
+
         bodyEl.innerHTML = `
             <p class="text-muted" style="margin-top:2px;">${FDPUI.weekdayLong(date)}, ${FDPUI.formatDateDisplay(dateStr)}${holidays[dateStr] ? ` – ${FDPUI.escapeHtml(holidays[dateStr])}` : ''}</p>
             <div class="table-scroll">
@@ -511,7 +504,7 @@ const FDPApp = (() => {
                                     ${violatedCodes.has(dept.code) ? `${FDPUI.icon('warning')} ` : ''}${FDPUI.escapeHtml(dept.code)} – ${FDPUI.escapeHtml(dept.name)}
                                 </td>
                                 <td>${present.length > 0 ? present.map(e => FDPUI.escapeHtml(e.shortCode || e.name)).join(', ') : '<span class="text-muted">niemand</span>'}</td>
-                                <td>${absent.length > 0 ? `<span class="text-muted">${absent.map(e => FDPUI.escapeHtml(e.shortCode || e.name)).join(', ')}</span>` : '–'}</td>
+                                <td>${absent.length > 0 ? absent.map(e => `<span class="text-muted">${FDPUI.escapeHtml(e.shortCode || e.name)}</span> <span class="badge badge-info">${FDPUI.escapeHtml(findAbsenceType(e.id) || '?')}</span>`).join(', ') : '–'}</td>
                             </tr>
                         `).join('')}
                     </tbody>
